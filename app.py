@@ -20,7 +20,7 @@ Lf1ImageIndexingStack(app, "Lf1ImageIndexingStack",
     # Uncomment the next line if you know exactly what Account and Region you
     # want to deploy the stack to. */
 
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
+    env=cdk.Environment(account='533267413906', region='us-east-1'),
 
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
     )
