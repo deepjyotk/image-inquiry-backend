@@ -36,6 +36,14 @@ jobs:
       - name: Install Requirements 
         run: 'pip3 install -r requirements.txt'
         working-directory: .
+      
+      - name: Install Requirements for lf1
+        run: 'pip install -r ./lambdas/ImageInquiry-lf1-frmCDK/requirements.txt --target=./layers/lf1-local-packages/python/lib/python3.11/site-packages'
+        working-directory: .
+
+      - name: Install Requirements for lf2
+        run: 'pip install -r ./lambdas/ImageInquiry-lf2-frmCDK/requirements.txt --target=./layers/lf2-local-packages/python/lib/python3.11/site-packages'
+        working-directory: .
 
       - name: CDK Synth
         run: cdk synth
