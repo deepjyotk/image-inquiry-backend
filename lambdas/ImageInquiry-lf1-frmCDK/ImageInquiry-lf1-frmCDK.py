@@ -22,6 +22,7 @@ def lambda_handler(event, context):
     try:
         print("***----------------")
         print("yar I've finally changed lf1***----------------")
+        print("yar I've finally changed yar lf1***----------------")
         # Extract details from event
         bucket_name = event['Records'][0]['s3']['bucket']['name']
         obj_key = event['Records'][0]['s3']['object']['key']
