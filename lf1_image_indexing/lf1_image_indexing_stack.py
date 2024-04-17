@@ -8,14 +8,18 @@ from aws_cdk import (
     Duration
 )
 from aws_cdk.aws_iam import PolicyStatement, AnyPrincipal
+from dotenv import load_dotenv
+
 
 from constructs import Construct
+import os
 
 
 class Lf1ImageIndexingStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        load_dotenv()
         bucket = s3.Bucket(self, "ImageInquiry-B2-frmCDK",
                            bucket_name="imageinquiry-b2-frmcdk",
                             #  blockPublicAccess: BucketAccessControl.BLOCK_ACLS,
