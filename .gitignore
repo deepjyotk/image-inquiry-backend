@@ -13,3 +13,4 @@ layers/*
 layers/** 
 venv/*
 local/*
+.env
