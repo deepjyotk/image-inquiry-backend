@@ -52,15 +52,15 @@ def lambda_handler(event, context):
 
         # Prepare for OpenSearch index
         host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
-        esUsername = os.environ['esUsername']
-        esPassword = os.environ['esPassword']
-        logger.debug(f"OpenSearch credentials retrieved: {esUsername}")
+        ESUSERNAME = os.environ['ESUSERNAME']
+        ESPASSWORD = os.environ['ESPASSWORD']
+        logger.debug(f"OpenSearch credentials retrieved: {ESUSERNAME}")
         
         
         if len(custom_labels) > 0:
             labels.extend(custom_labels) 
 
-        auth = (esUsername, esPassword)
+        auth = (ESUSERNAME, ESPASSWORD)
         INDEX_NAME = "photo-label"
         esEndPoint = os.environ["OPENSEARCH_HOST_ENDPOINT"]
 

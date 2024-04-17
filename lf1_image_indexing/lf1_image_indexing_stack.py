@@ -95,9 +95,9 @@ class Lf1ImageIndexingStack(Stack):
                                      layers=[layer1],
                                      timeout= Duration.minutes(10),
                                        environment={
-                                         'OPENSEARCH_HOST_ENDPOINT': 'search-photo-label-os-domain-mdmhp5yj32skks62nywaguso7i.us-east-1.es.amazonaws.com',
-                                         'esUsername': 'deepjyot',
-                                         'esPassword': 'Deep@123'
+                                         'OPENSEARCH_HOST_ENDPOINT': os.environ['OPENSEARCH_HOST_ENDPOINT'],
+                                         'ESUSERNAME': os.environ['ESUSERNAME'],
+                                         'ESPASSWORD': os.environ['ESPASSWORD'],
                                      }
                                      )
         lambda_fn2 = lambda_.Function(self, "ImageInquiry-lf2-frmCDK",
@@ -109,9 +109,9 @@ class Lf1ImageIndexingStack(Stack):
                                      layers=[layer2],
                                      timeout= Duration.minutes(10),
                                        environment={
-                                         'OPENSEARCH_HOST_ENDPOINT': 'search-photo-label-os-domain-mdmhp5yj32skks62nywaguso7i.us-east-1.es.amazonaws.com',
-                                         'esUsername': 'deepjyot',
-                                         'esPassword': 'Deep@123'
+                                          'OPENSEARCH_HOST_ENDPOINT': os.environ['OPENSEARCH_HOST_ENDPOINT'],
+                                         'ESUSERNAME': os.environ['ESUSERNAME'],
+                                         'ESPASSWORD': os.environ['ESPASSWORD'],
                                      }
                                      )
 

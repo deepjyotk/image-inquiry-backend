@@ -83,8 +83,8 @@ def get_photo_path(keys):
     print(f"Host is: {host}")
     
     auth = (
-            os.environ['esUsername'],
-           os.environ['esPassword']
+            os.environ['ESUSERNAME'],
+           os.environ['ESPASSWORD']
     )
 
     

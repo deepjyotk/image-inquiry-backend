@@ -12,3 +12,4 @@ local-packages/*
 layers/*
 layers/** 
 venv/*
+local/*
