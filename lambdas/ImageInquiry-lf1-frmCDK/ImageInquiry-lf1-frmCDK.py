@@ -20,7 +20,7 @@ def lambda_handler(event, context):
     print(f"event received is: {event}")
 
     try:
-        print("******************************************")
+        print("***----------------")
         # Extract details from event
         bucket_name = event['Records'][0]['s3']['bucket']['name']
         obj_key = event['Records'][0]['s3']['object']['key']
