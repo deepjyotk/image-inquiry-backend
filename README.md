@@ -55,4 +55,9 @@ command.
  * `cdk diff`        compare deployed stack with current state
  * `cdk docs`        open CDK documentation
 
-Enjoy!
+
+## Architecture
+
+<img width="1002" alt="image" src="https://github.com/deepjyotk/lf1-image-indexing/assets/45242325/622d598e-0ac1-4718-b5db-14ec6e8c0271">
+
+
