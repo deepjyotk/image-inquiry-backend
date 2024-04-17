@@ -2,8 +2,8 @@ name: Deploy AWS CDK
 
 # Controls when the action will run. 
 on:
-  # push:
-  #   branches: [ master ]
+  push:
+    branches: [ main ]
   #pull_request:
     #branches: [ main ]
 
