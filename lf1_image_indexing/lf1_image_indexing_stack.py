@@ -7,6 +7,8 @@ from aws_cdk import (
     Stack,
     Duration
 )
+from aws_cdk.aws_iam import PolicyStatement, AnyPrincipal
+
 from constructs import Construct
 
 
@@ -22,6 +24,18 @@ class Lf1ImageIndexingStack(Stack):
                            removal_policy=RemovalPolicy.DESTROY
                            
                            )  # Adjust the policy as necessary
+                # Define the bucket policy
+        policy_statement = PolicyStatement(
+            actions=["s3:*"],
+            resources=[
+                bucket.bucket_arn,
+                bucket.arn_for_objects("*")
+            ],
+            principals=[AnyPrincipal()]
+        )
+
+        # Attach the policy to the bucket
+        bucket.add_to_resource_policy(policy_statement)
         
         # layer = lambda_.LayerVersion(self, "MyPythonDependencies",
         #                              code=lambda_.Code.from_asset("layers/"),

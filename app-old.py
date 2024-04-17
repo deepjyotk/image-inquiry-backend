@@ -1,12 +1,13 @@
+#!/usr/bin/env python3
 import os
 
 import aws_cdk as cdk
 
-from aws_codepipeline.aws_codepipeline_stack import AwsCodepipelineStack
+from lf1_image_indexing.lf1_image_indexing_stack import Lf1ImageIndexingStack
 
 
 app = cdk.App()
-AwsCodepipelineStack(app, "AwsCodepipelineStack",
+Lf1ImageIndexingStack(app, "Lf1ImageIndexingStack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
@@ -20,11 +21,8 @@ AwsCodepipelineStack(app, "AwsCodepipelineStack",
     # want to deploy the stack to. */
 
     env=cdk.Environment(account='533267413906', region='us-east-1'),
-    stack_name='github-codepipeline-stack'
 
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
     )
-cdk.Tags.of(app).add(key='feature',value='resource_stack')
-cdk.Tags.of(app).add(key='contact',value='dsk7806@nyu.edu')
-cdk.Tags.of(app).add(key='team',value='best_team')
+
 app.synth()
