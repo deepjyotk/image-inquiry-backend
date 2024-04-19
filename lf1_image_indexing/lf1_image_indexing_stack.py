@@ -9,8 +9,6 @@ from aws_cdk import (
 )
 from aws_cdk.aws_iam import PolicyStatement, AnyPrincipal
 from dotenv import load_dotenv
-
-
 from constructs import Construct
 import os
 
