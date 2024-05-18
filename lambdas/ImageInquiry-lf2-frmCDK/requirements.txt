@@ -2,3 +2,4 @@ opensearch-py==2.5.0
 requests-aws4auth==1.2.3
 utils==1.0.2
 elasticsearch==7.13.4
+spacy==3.5.0

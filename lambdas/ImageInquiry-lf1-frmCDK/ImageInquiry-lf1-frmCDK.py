@@ -47,6 +47,8 @@ def lambda_handler(event, context):
         s3_resp = s3.head_object(Bucket=bucket_name, Key=obj_key)
         custom_labels = s3_resp["Metadata"].get("customlabels", "")
         logger.info(f"Custom labels retrieved: {custom_labels}")
+        
+        logger.info(f"Type(custom_labels): {type(custom_labels)}")
 
         # Prepare for OpenSearch index
         host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
@@ -56,8 +58,11 @@ def lambda_handler(event, context):
         
         
         if len(custom_labels) > 0:
-            labels.extend(custom_labels) 
-
+            custom_labels_list = custom_labels.split(',')
+            custom_labels_list = [label.strip() for label in custom_labels_list]
+            labels.extend(custom_labels_list) 
+        
+        print(f"Final labels sent to opean search service is: {labels}")
         auth = (ESUSERNAME, ESPASSWORD)
         INDEX_NAME = "photo-label"
         esEndPoint = os.environ["OPENSEARCH_HOST_ENDPOINT"]
