@@ -50,7 +50,8 @@ jobs:
         run: | 
           rm -rf ./layers/lf2-local-packages/python/lib/python3.11/site-packages/*
           pip install -r ./lambdas/ImageInquiry-lf2-frmCDK/requirements.txt --target=./layers/lf2-local-packages/python/lib/python3.11/site-packages
-          pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0.tar.gz --target=./layers/lf2-local-packages/python/lib/python3.11/site-packages
+          export SPACY_DATA=./layers/lf2-local-packages/python/lib/python3.11/site-packages
+          python -m spacy download en_core_web_sm
         working-directory: .
 
       - name: CDK Synth
