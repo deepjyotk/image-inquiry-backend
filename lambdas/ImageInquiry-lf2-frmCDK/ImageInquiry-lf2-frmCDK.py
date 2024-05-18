@@ -6,7 +6,7 @@ import random
 import boto3
 from opensearchpy.connection.http_requests import RequestsHttpConnection
 from elasticsearch import Elasticsearch, RequestsHttpConnection
-
+import spacy
 from requests_aws4auth import AWS4Auth
 
 import utils as opensearch_utils
@@ -18,9 +18,36 @@ headers = { "Content-Type": "application/json" }
 region = 'us-east-1'
 lex = boto3.client('lex-runtime', region_name=region)
 
+
+def extract_entities(nlp, prompt):
+    # Process the prompt
+    doc = nlp(prompt)
+    # Extract entities and filter only if they are proper nouns (PERSON, GPE, ORG) or nouns
+    entities = [ent.text for ent in doc.ents if ent.label_ in {'PERSON', 'GPE', 'ORG'}]
+    # Additional logic to capture nouns that are not named entities, useful for "beach" etc.
+    nouns = [token.text for token in doc if token.pos_ == 'NOUN' and token.text not in entities]
+    # Combine entities and relevant nouns
+    return ', '.join(entities + nouns)
+
 def lambda_handler(event, context):
     try:
         print("Event is: ", event)
+        nlp = spacy.load('en_core_web_sm')
+        # Example Prompts
+        prompts = [
+            "Give me photos of Alex AND Jesse",
+            "Give me photos of Eric, Alex, Jesse, and MAX",
+            "Give me photos of Eric AND Maya on beach",
+            "Images of Eric with Maya but no Calvin",
+            "Images of Eric with Maya"
+        ]
+
+        # Apply the function to each prompt
+        for prompt in prompts:
+            print(f"Prompt: '{prompt}' -> Subjects: '{extract_entities(prompt)}'")
+        
+        
+        
         print(f"{event['query']}" )
         query = event['query']
         labels_list = get_labels(query)
