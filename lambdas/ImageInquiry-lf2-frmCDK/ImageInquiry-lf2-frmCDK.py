@@ -6,7 +6,6 @@ import random
 import boto3
 from opensearchpy.connection.http_requests import RequestsHttpConnection
 from elasticsearch import Elasticsearch, RequestsHttpConnection
-import spacy
 from requests_aws4auth import AWS4Auth
 
 import utils as opensearch_utils
@@ -19,44 +18,57 @@ region = 'us-east-1'
 lex = boto3.client('lex-runtime', region_name=region)
 
 
-def extract_entities(nlp, prompt):
-    # Process the prompt
-    doc = nlp(prompt)
-    # Extract entities and filter only if they are proper nouns (PERSON, GPE, ORG) or nouns
-    entities = [ent.text for ent in doc.ents if ent.label_ in {'PERSON', 'GPE', 'ORG'}]
-    # Additional logic to capture nouns that are not named entities, useful for "beach" etc.
-    nouns = [token.text for token in doc if token.pos_ == 'NOUN' and token.text not in entities]
-    # Combine entities and relevant nouns
-    return ', '.join(entities + nouns)
+def extract_nouns_after_keywords(text, keywords=["images of", "photos of"]):
+    comprehend = boto3.client(service_name='comprehend', region_name='us-east-1')
+    # Convert text to lowercase for case-insensitive matching
+    lower_text = text.lower()
+
+    # Find the position of any keyword
+    keyword_position = -1
+    for keyword in keywords:
+        pos = lower_text.find(keyword)
+        if pos != -1:
+            keyword_position = pos
+            keyword_length = len(keyword)
+            break
+
+    if keyword_position != -1:
+        # Extract the substring after the keyword
+        relevant_text = text[keyword_position + keyword_length:].strip()
+    else:
+        # Use the entire text if no keyword is found
+        relevant_text = text.strip()
+    
+    # Call the detect_syntax method
+    response = comprehend.detect_syntax(Text=relevant_text, LanguageCode='en')
+
+    # Extract nouns
+    nouns = [token['Text'] for token in response['SyntaxTokens'] if token['PartOfSpeech']['Tag'] in ['NOUN', 'PROPN']]
+    return nouns
 
 def lambda_handler(event, context):
     try:
+        body = json.loads(event['body'])
+        print("Hello from lambda")
         print("Event is: ", event)
-        nlp = spacy.load('en_core_web_sm')
         # Example Prompts
-        prompts = [
-            "Give me photos of Alex AND Jesse",
-            "Give me photos of Eric, Alex, Jesse, and MAX",
-            "Give me photos of Eric AND Maya on beach",
-            "Images of Eric with Maya but no Calvin",
-            "Images of Eric with Maya"
-        ]
-
+        prompt = f"{body['query']}"
+        custom_label  = body['custom_label']
+        custom_label_list = custom_label.split(',')
+        custom_label_list = [item.strip() for item in custom_label_list]
+        
+        
         # Apply the function to each prompt
-        for prompt in prompts:
-            print(f"Prompt: '{prompt}' -> Subjects: '{extract_entities(prompt)}'")
+        nouns = extract_nouns_after_keywords(prompt)
+        print(f"Prompt: '{prompt}' -> Nouns: '{nouns}'")
         
-        
-        
-        print(f"{event['query']}" )
-        query = event['query']
-        labels_list = get_labels(query)
-        print(f"labels_list is: {labels_list}")
-        
+        combined_list = custom_label_list+nouns
+        combined_list = list(set(combined_list))
+        print("combined_list is: ", combined_list)
 
         # labels_list  = [item.strip() for item in labels.split(',')]
-        if len(labels_list) != 0:
-            img_paths = get_photo_path(labels_list)
+        if len(combined_list) != 0:
+            img_paths = get_photo_path(combined_list)
             print(f"img_paths is: {img_paths}")
         
         return {
@@ -77,79 +89,59 @@ def lambda_handler(event, context):
         logger.error(f"Unhandled exception: {str(e)}")
         return {'statusCode': 500, 'body': json.dumps('An unexpected error occurred.')}
 
-def get_labels(query):
-    sample_string = 'pqrstuvwxyabdsfbc'
-    userid = ''.join((random.choice(sample_string)) for x in range(8))
-    
-    print(f"Query to lex is: {query}")
-    
-    response = lex.post_text(
-        botName='FindKeywords',                 
-        botAlias='alias',
-        userId=userid,           
-        inputText=query
-    )
-    
-    print(f"response from lex is: : {response}")
-    # print("lex-response", response)
-    
-    labels = []
-    if 'slots' not in response:
-        print("No photo collection for query {}".format(query))
-    else:
-        print ("slot: ",response['slots'])
-        slot_val = response['slots']
-        for key,value in slot_val.items():
-            if value!=None:
-                labels.append(value.strip())
-    return labels
 
+def get_photo_path(word_list):
+    host = "search-imageinquiry-domain-d67sch3jzpmlzyp65dcc34notu.aos.us-east-1.on.aws"
+    auth = ("deepjyot", "Deep@123")
 
-def get_photo_path(keys):
-    host= os.environ["OPENSEARCH_HOST_ENDPOINT"]
-    print(f"Host is: {host}")
-    
-    auth = (
-            os.environ['ESUSERNAME'],
-           os.environ['ESPASSWORD']
-    )
+    try:
+        # Initialize Elasticsearch client
+        es = Elasticsearch(
+            hosts=[{'host': host, 'port': 443}],
+            use_ssl=True,
+            http_auth=auth,
+            verify_certs=True,
+            connection_class=RequestsHttpConnection
+        )
 
-    
-    es = Elasticsearch(
-        hosts=[{'host': host, 'port':443}],
-        use_ssl=True,
-        http_auth=auth,
-        verify_certs=True,
-        connection_class=RequestsHttpConnection)
-    
-    es.info()
-    logger.info(f"Connected to OpenSearch at {es}")
-    
-    resp = []
-    for key in keys:
-        print(f"Key is: {key}")
-        if (key is not None) and key != '':
-            searchData = es.search({"query": {"match": {"labels": key}}})
-            resp.append(searchData)
+        # Check connection
+        if not es.ping():
+            logger.error("Could not connect to Elasticsearch")
+            return []
 
-    output = []
-    for r in resp:
-        print(f"response is: {r}")
-        if 'hits' in r:
-             for val in r['hits']['hits']:
-                entire_obj_path = f"https://{val['_source']['bucket']}.s3.amazonaws.com/{val['_source']['objectKey']}"
+        logger.info(f"Connected to OpenSearch at {host}")
+
+        # Create the query
+        should_clauses = [{"match": {"labels": word.lower()}} for word in word_list]
+        query = {
+            "query": {
+                "bool": {
+                    "should": should_clauses
+                }
+            }
+        }
+
+        INDEX_NAME = "photo-label"
+
+        # Perform the search
+        response = es.search(index=INDEX_NAME, body=query)
+        logger.info("Search query executed successfully")
+
+        # Process the response
+        output = []
+        hits = response.get('hits', {}).get('hits', [])
+
+        for hit in hits:
+            source = hit.get('_source', {})
+            bucket = source.get('bucket')
+            object_key = source.get('objectKey')
+            if bucket and object_key:
+                entire_obj_path = f"https://{bucket}.s3.amazonaws.com/{object_key}"
                 if entire_obj_path not in output:
-                    
                     output.append(entire_obj_path)
-                    # output.append('s3://pipebucketcloud/'+key)
-    # print (output)
-    return output  
 
+        return output
 
-# if __name__ == '__main__':
-#     # photos = get_photo_path(['dog' , 'blazer'])
-#     labels = get_labels("show images of cat and dog")
-#     # print(f'Photos:{photos}', )
-
-
-
+    except Exception as e:
+        logger.error(f"Error occurred: {e}")
+        return []

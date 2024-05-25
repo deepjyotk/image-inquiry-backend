@@ -50,13 +50,7 @@ jobs:
         run: | 
           pip install -r ./lambdas/ImageInquiry-lf2-frmCDK/requirements.txt --target=./layers/lf2-local-packages/python/lib/python3.11/site-packages
         working-directory: .
-
-      - name: Install Spacy For Lf2
-        run: |
-          export SPACY_DATA=./layers/lf2-local-packages/python/lib/python3.11/site-packages &&
-          python -m spacy download en_core_web_sm
-        working-directory: .
-
+        
       - name: CDK Synth
         run: cdk synth
         working-directory: .

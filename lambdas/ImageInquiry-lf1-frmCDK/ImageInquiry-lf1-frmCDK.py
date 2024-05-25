@@ -1,106 +1,121 @@
-import os
 import json
-import logging
-
-
-import datetime
 import boto3
-from opensearchpy.connection.http_requests import RequestsHttpConnection
+import base64
+import os
+import datetime
+from botocore.exceptions import ClientError
 from elasticsearch import Elasticsearch, RequestsHttpConnection
-from requests_aws4auth import AWS4Auth
 
+LABEL_DETECTION_MIN_CONFIDENCE = 75
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+def parse_multipart_data(content_type, body_data):
+    boundary = content_type.split("boundary=")[-1]
+    body_data = base64.b64decode(body_data)
+    parts = body_data.split(bytes('--' + boundary, 'utf-8'))
+    
+    parsed_parts = {}
+    image_bytes = None
+    
+    for part in parts:
+        if b'Content-Disposition: form-data;' in part:
+            header_area, _, content = part.partition(b'\r\n\r\n')
+            header_area = header_area.decode('utf-8')
+            name_part = header_area.split('name="')[1].split('"')[0]
+            
+            if 'filename="' in header_area:
+                image_bytes = content.rstrip(b'\r\n')
+            else:
+                parsed_parts[name_part] = content.decode('utf-8').rstrip('\r\n')
+    
+    return parsed_parts, image_bytes
 
-def lambda_handler(event, context):
-    LABEL_DETECTION_MIN_CONFIDENCE = 99
-    logger.info("Hello from LambdaHandler")
-    logger.info(f"Event received: {event}")
-    print(f"event received is: {event}")
-
+def upload_to_s3(s3_client, bucket_name, object_name, image_bytes, metadata):
     try:
-        print("Testing CICD ")
-        # Extract details from event
-        bucket_name = event['Records'][0]['s3']['bucket']['name']
-        obj_key = event['Records'][0]['s3']['object']['key']
-        logger.info(f"Extracted Bucket: {bucket_name}, Key: {obj_key}")
+        response = s3_client.put_object(
+            Bucket=bucket_name,
+            Key=object_name,
+            Body=image_bytes,
+            Metadata=metadata
+        )
+        return response
+    except ClientError as e:
+        raise RuntimeError(f"Failed to upload to S3: {str(e)}")
 
-        # Call Rekognition
-        rkgn_client = boto3.client('rekognition')
-        rkgn_response = rkgn_client.detect_labels(
-            Image={
-                "S3Object": {
-                    "Bucket": bucket_name,
-                    "Name": obj_key
-                }
-            },
+def detect_labels(rkgn_client, bucket_name, object_name):
+    try:
+        response = rkgn_client.detect_labels(
+            Image={"S3Object": {"Bucket": bucket_name, "Name": object_name}},
             MinConfidence=LABEL_DETECTION_MIN_CONFIDENCE
         )
-        print(f"Rekognition response received with {(rkgn_response['Labels'])} labels")
-        
-        labels = [label_group["Name"] for label_group in rkgn_response["Labels"]]
-        print(f"Labels is: {labels}")
-        
-        # Get custom labels from S3 metadata
-        s3 = boto3.client("s3", region_name='us-east-1')
-        s3_resp = s3.head_object(Bucket=bucket_name, Key=obj_key)
-        custom_labels = s3_resp["Metadata"].get("customlabels", "")
-        logger.info(f"Custom labels retrieved: {custom_labels}")
-        
-        logger.info(f"Type(custom_labels): {type(custom_labels)}")
+        return [label["Name"] for label in response["Labels"]]
+    except ClientError as e:
+        raise RuntimeError(f"Failed to detect labels: {str(e)}")
 
-        # Prepare for OpenSearch index
-        host = os.environ.get("OPENSEARCH_HOST_ENDPOINT")
-        ESUSERNAME = os.environ['ESUSERNAME']
-        ESPASSWORD = os.environ['ESPASSWORD']
-        logger.debug(f"OpenSearch credentials retrieved: {ESUSERNAME}")
-        
-        
-        if len(custom_labels) > 0:
-            custom_labels_list = custom_labels.split(',')
-            custom_labels_list = [label.strip() for label in custom_labels_list]
-            labels.extend(custom_labels_list) 
-        
-        print(f"Final labels sent to opean search service is: {labels}")
-        auth = (ESUSERNAME, ESPASSWORD)
-        INDEX_NAME = "photo-label"
-        esEndPoint = os.environ["OPENSEARCH_HOST_ENDPOINT"]
+def get_custom_labels(s3_client, bucket_name, object_name):
+    try:
+        response = s3_client.head_object(Bucket=bucket_name, Key=object_name)
+        return response["Metadata"].get("customlabels", "")
+    except ClientError as e:
+        raise RuntimeError(f"Failed to retrieve custom labels: {str(e)}")
 
-        es = Elasticsearch(
-            hosts=[{'host': esEndPoint, 'port': 443}],
-            http_auth=auth,
+def index_to_opensearch(es_client, index_name, record):
+    try:
+        response = es_client.index(index=index_name, body=record)
+        return response
+    except Exception as e:
+        raise RuntimeError(f"Failed to index to OpenSearch: {str(e)}")
+
+def lambda_handler(event, context):
+    s3_client = boto3.client('s3')
+    rkgn_client = boto3.client('rekognition')
+    
+    try:
+        content_type = event['headers']['Content-Type']
+        body_data = event['body']
+        
+        parsed_parts, image_bytes = parse_multipart_data(content_type, body_data)
+        
+        bucket_name = 'imageinquiry-b2-frmcdk'
+        object_name = parsed_parts.get('filename', 'filename')
+        
+        if image_bytes:
+            upload_to_s3(
+                s3_client, bucket_name, object_name, image_bytes,
+                {'customlabels': parsed_parts.get('customlabels', '')}
+            )
+        
+        labels = detect_labels(rkgn_client, bucket_name, object_name)
+        
+        custom_labels = get_custom_labels(s3_client, bucket_name, object_name)
+        if custom_labels:
+            labels.extend(custom_labels.split(','))
+        
+        es_client = Elasticsearch(
+            hosts=[{'host': os.environ["OPENSEARCH_HOST_ENDPOINT"], 'port': 443}],
+            http_auth=(os.environ['ESUSERNAME'], os.environ['ESPASSWORD']),
             use_ssl=True,
             verify_certs=True,
             connection_class=RequestsHttpConnection
         )
-        es.info()
-        logger.info(f"Connected to OpenSearch at {esEndPoint}")
-
-        # Insert data into OpenSearch
+        
         current_time = datetime.datetime.now().isoformat()
-        logger.info(f"Current timestamp: {current_time}")
         record = {
             "bucket": bucket_name,
-            "objectKey": obj_key,
+            "objectKey": object_name,
             "createdTimestamp": current_time,
             "labels": ' '.join(labels).lower()
         }
-        print(f"Record getting stored in os is: {record}")
-        es_response = es.index(index=INDEX_NAME, body=record)
-        logger.info(f"Document indexed in OpenSearch with response: {es_response}")
+        
+        index_to_opensearch(es_client, "photo-label", record)
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Hello from Lambda!')
+        }
 
     except KeyError as e:
-        logger.error(f"Key error: {str(e)} - Event may not have the expected structure.")
-        return {'statusCode': 500, 'body': json.dumps('Key Error!')}
+        return {'statusCode': 500, 'body': json.dumps(f'Key Error: {str(e)}')}
     except boto3.exceptions.Boto3Error as e:
-        logger.error(f"AWS Boto3 error: {str(e)}")
-        return {'statusCode': 500, 'body': json.dumps('AWS Service Error!')}
+        return {'statusCode': 500, 'body': json.dumps(f'AWS Service Error: {str(e)}')}
     except Exception as e:
-        logger.error(f"Unhandled exception: {str(e)}")
-        return {'statusCode': 500, 'body': json.dumps('An unexpected error occurred.')}
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Hello from Lambda!')
-    }
+        return {'statusCode': 500, 'body': json.dumps(f'An unexpected error occurred: {str(e)}')}
