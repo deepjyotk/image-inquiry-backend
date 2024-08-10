@@ -3,11 +3,11 @@ import os
 
 import aws_cdk as cdk
 
-from lf1_image_indexing.lf1_image_indexing_stack import Lf1ImageIndexingStack
+from lf1_image_indexing.ImageInquiryStack import ImageInquiryStack
 
 
 app = cdk.App()
-Lf1ImageIndexingStack(app, "Lf1ImageIndexingStack",
+ImageInquiryStack(app, "ImageInquiryStack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.

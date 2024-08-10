@@ -3,10 +3,16 @@ import boto3
 import base64
 import os
 import datetime
+import logging
+import uuid
 from botocore.exceptions import ClientError
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 
 LABEL_DETECTION_MIN_CONFIDENCE = 75
+
+# Set up logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def parse_multipart_data(content_type, body_data):
     boundary = content_type.split("boundary=")[-1]
@@ -66,29 +72,40 @@ def index_to_opensearch(es_client, index_name, record):
         raise RuntimeError(f"Failed to index to OpenSearch: {str(e)}")
 
 def lambda_handler(event, context):
+    logger.info('Event: %s', json.dumps(event))
     s3_client = boto3.client('s3')
     rkgn_client = boto3.client('rekognition')
     
     try:
         content_type = event['headers']['Content-Type']
+        logger.info('Content-Type: %s', content_type)
         body_data = event['body']
+        logger.info('Body data received')
         
         parsed_parts, image_bytes = parse_multipart_data(content_type, body_data)
+        logger.info('Parsed parts: %s', parsed_parts)
         
-        bucket_name = 'imageinquiry-b2-frmcdk'
-        object_name = parsed_parts.get('filename', 'filename')
+        bucket_name = 'imageinquiry-images'
         
-        if image_bytes:
+        user_id = "u123"  # Replace with the actual user ID from your context or event
+        image_id = str(uuid.uuid4())
+        object_name = f"{user_id}/{image_id}"
+        logger.info('Object name: %s', object_name)
+        
+        isS3UploadSuccessful = False
+        if (image_bytes):
             upload_to_s3(
                 s3_client, bucket_name, object_name, image_bytes,
                 {'customlabels': parsed_parts.get('customlabels', '')}
             )
+            isS3UploadSuccessful = True
+            logger.info('Image uploaded to S3')
+        
+        if not isS3UploadSuccessful:
+            return {'statusCode': 500, 'body': json.dumps('An unexpected error occurred.')}
         
         labels = detect_labels(rkgn_client, bucket_name, object_name)
-        
-        custom_labels = get_custom_labels(s3_client, bucket_name, object_name)
-        if custom_labels:
-            labels.extend(custom_labels.split(','))
+        logger.info('Detected labels: %s', labels)
         
         es_client = Elasticsearch(
             hosts=[{'host': os.environ["OPENSEARCH_HOST_ENDPOINT"], 'port': 443}],
@@ -97,25 +114,34 @@ def lambda_handler(event, context):
             verify_certs=True,
             connection_class=RequestsHttpConnection
         )
+        logger.info('Connected to OpenSearch')
         
         current_time = datetime.datetime.now().isoformat()
-        record = {
-            "bucket": bucket_name,
-            "objectKey": object_name,
-            "createdTimestamp": current_time,
-            "labels": ' '.join(labels).lower()
-        }
         
-        index_to_opensearch(es_client, "photo-label", record)
+        es_index = 'photo-label'
+        
+        record = {
+            "user_id": user_id,
+            "img_s3_path": f"https://{bucket_name}.s3.amazonaws.com/{object_name}",
+            "objectKey": object_name,
+            "ai_labels": [label.lower() for label in labels]
+        }
+        logger.info('Record to index: %s', record)
+        
+        index_to_opensearch(es_client, es_index, record)
+        logger.info('Record indexed to OpenSearch')
         
         return {
             'statusCode': 200,
-            'body': json.dumps('Hello from Lambda!')
+            'body': json.dumps({'labels': labels})
         }
 
     except KeyError as e:
+        logger.error('Key Error: %s', str(e))
         return {'statusCode': 500, 'body': json.dumps(f'Key Error: {str(e)}')}
     except boto3.exceptions.Boto3Error as e:
+        logger.error('AWS Service Error: %s', str(e))
         return {'statusCode': 500, 'body': json.dumps(f'AWS Service Error: {str(e)}')}
     except Exception as e:
+        logger.error('An unexpected error occurred: %s', str(e))
         return {'statusCode': 500, 'body': json.dumps(f'An unexpected error occurred: {str(e)}')}

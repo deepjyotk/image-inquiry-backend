@@ -14,3 +14,5 @@ layers/**
 venv/*
 local/*
 .env
+layers/*
+myenv/*

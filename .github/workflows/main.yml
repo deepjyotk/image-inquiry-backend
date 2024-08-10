@@ -42,13 +42,18 @@ jobs:
         run: 'pip3 install -r requirements.txt'
         working-directory: .
       
-      - name: Install Requirements for lf1
-        run: 'pip install -r ./lambdas/ImageInquiry-lf1-frmCDK/requirements.txt --target=./layers/lf1-local-packages/python/lib/python3.11/site-packages'
+      - name: Install Requirements for Generate AI Labels Handler
+        run: 'pip install -r ./lambdas/imageinquiry-generate-ai-labels-handler/requirements.txt --target=./layers/generate-ai-labels-packages/python/lib/python3.12/site-packages'
         working-directory: .
 
-      - name: Install Requirements for lf2
+      - name: Install Requirements for Upload Handler
         run: | 
-          pip install -r ./lambdas/ImageInquiry-lf2-frmCDK/requirements.txt --target=./layers/lf2-local-packages/python/lib/python3.11/site-packages
+          pip install -r ./lambdas/imageinquiry-upload-handler/requirements.txt --target=./layers/upload-packages/python/lib/python3.12/site-packages
+        working-directory: .
+
+      - name: Install Requirements for Search Handler
+        run: | 
+          pip install -r ./lambdas/imageinquiry-search-handler/requirements.txt --target=./layers/search-handler-packages/python/lib/python3.12/site-packages
         working-directory: .
         
       - name: CDK Synth
