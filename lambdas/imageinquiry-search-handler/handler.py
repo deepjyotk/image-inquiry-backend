@@ -13,6 +13,8 @@ headers = { "Content-Type": "application/json" }
 region = 'us-east-1'
 lex = boto3.client('lex-runtime', region_name=region)
 
+# Assuming the S3 bucket name is 'imageinquiry-images'
+S3_URL_PREFIX = "https://s3.amazonaws.com/"
 
 def isRequestRateLimited(user_id, allowed_requests, time_window):
     dynamodb = boto3.resource('dynamodb')
@@ -79,7 +81,7 @@ def lambda_handler(event, context):
         print("Hello from lambda")
         print("Event is: ", event)
         user_sub = event.get('requestContext', {}).get('authorizer').get('claims').get('sub')
-        print("user sub is: ",user_sub)
+        print("user sub is: ", user_sub)
         allowed_requests = 2
         time_window = 60
         
@@ -97,28 +99,17 @@ def lambda_handler(event, context):
                 'body': json.dumps(body)
             }
             
-        # get('authorizer', {}).get('claims', {}).get('sub', None)
-        # print("Sub is: ", event.get('requestContext', {}).get('authorizer').get('claims').get('sub'))
-
-        # Example Prompts
-        # prompt = f"{body['query']}"
         custom_label  = body['query']
         custom_label_list = custom_label.split(',')
         custom_label_list = [item.strip() for item in custom_label_list]
-        
-        
-        # Apply the function to each prompt
-        # nouns = extract_nouns_after_keywords(prompt)
-        # print(f"Prompt: '{prompt}' -> Nouns: '{nouns}'")
         
         combined_list = custom_label_list
         combined_list = list(set(combined_list))
         print("combined_list is: ", combined_list)
 
-        # labels_list  = [item.strip() for item in labels.split(',')]
         if len(combined_list) != 0:
             print("combined_list: ", combined_list)
-            img_paths = get_photo_path(custom_label,user_sub)
+            img_paths = get_photo_path(custom_label, user_sub)
             print(f"img_paths is: {img_paths}")
         
         return {
@@ -126,7 +117,7 @@ def lambda_handler(event, context):
             "Access-Control-Allow-Origin" : "*", 
         },
             'statusCode': 200,
-            'body': json.dumps( list(img_paths))
+            'body': json.dumps(list(img_paths))
         }
     
     except KeyError as e:
@@ -180,10 +171,6 @@ def construct_query(query_string):
 
     return query
 
-# Example usage
-# query_string = 'Search Query 1 AND Search Query 2 OR Search Query 3'
-# query = construct_query(query_string)
-
 def get_photo_path(query_string, user_sub):
     host = "search-imageinquiry-domain-d67sch3jzpmlzyp65dcc34notu.aos.us-east-1.on.aws"
     auth = ("deepjyot", "Deep@123")
@@ -205,26 +192,27 @@ def get_photo_path(query_string, user_sub):
 
         logger.info(f"Connected to OpenSearch at {host}")
         query = construct_query(query_string)
-        
-        
 
         INDEX_NAME = f"photo-label-{user_sub}"
 
         # Perform the search
         response = es.search(index=INDEX_NAME, body=query)
-        logger.info("Search query executed successfully: response is: ", response)
+        logger.info("Search query executed successfully")
 
         # Process the response
         output = []
         hits = response.get('hits', {}).get('hits', [])
-        print("hits is: ", hits)
+        logger.info(f"Hits: {hits}")
+        
         for hit in hits:
             source = hit.get('_source', {})
-            print("source is: ", source)
-            img_s3_path = source.get('img_s3_path')
-            if img_s3_path:
-                if img_s3_path not in output:
-                    output.append(img_s3_path)
+            logger.info(f"Source: {source}")
+            s3_path = source.get('s3-path')
+            if s3_path:
+                # The s3_path already includes the bucket name, so we only need to prepend the URL prefix
+                full_s3_url = f"{S3_URL_PREFIX}{s3_path}"
+                if full_s3_url not in output:
+                    output.append(full_s3_url)
 
         return output
 

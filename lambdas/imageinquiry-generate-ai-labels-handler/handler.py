@@ -78,7 +78,7 @@ def index_to_opensearch(es_client, index_name, record):
 
 
 
-def insert_item(user_id, image_id, filename, caption):
+def insert_item(user_id, s3_path, image_id, filename, caption):
     # Initialize a session using Amazon DynamoDB
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     
@@ -90,6 +90,7 @@ def insert_item(user_id, image_id, filename, caption):
         Item={
             'user_id': user_id,
             'image_id': image_id,
+            's3-path': s3_path,
             'filename': filename,
             'caption': caption,
             'tags': [],  # Initially empty,
@@ -104,7 +105,7 @@ def lambda_handler(event, context):
     logger.info('Event: %s', json.dumps(event))
     s3_client = boto3.client('s3')
     rkgn_client = boto3.client('rekognition')
-    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub',{})
+    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub', {})
     logger.info(f"user_id is: {user_id}")
     
     try:
@@ -120,13 +121,12 @@ def lambda_handler(event, context):
         
         bucket_name = 'imageinquiry-images'
         
-        # user_id = "u123"  # Replace with the actual user ID from your context or event
         image_id = str(uuid.uuid4())
         object_name = f"{user_id}/{image_id}"
         logger.info('Object name: %s', object_name)
         
         isS3UploadSuccessful = False
-        if (image_bytes):
+        if image_bytes:
             upload_to_s3(
                 s3_client, bucket_name, object_name, image_bytes,
                 {'customlabels': parsed_parts.get('customlabels', '')}
@@ -138,42 +138,16 @@ def lambda_handler(event, context):
             return {'statusCode': 500, 'body': json.dumps('An unexpected error occurred.')}
         
         labels = detect_labels(rkgn_client, bucket_name, object_name)
-        logger.info('Detected labels: %s', labels)
         
-        es_client = Elasticsearch(
-            hosts=[{'host': os.environ["OPENSEARCH_HOST_ENDPOINT"], 'port': 443}],
-            http_auth=(os.environ['ESUSERNAME'], os.environ['ESPASSWORD']),
-            use_ssl=True,
-            verify_certs=True,
-            connection_class=RequestsHttpConnection
-        )
-        logger.info('Connected to OpenSearch')
-        
-        current_time = datetime.datetime.now().isoformat()
-        
-        es_index = 'photo-label'
-        
-        record = {
-            "user_id": user_id,
-            "img_s3_path": f"https://{bucket_name}.s3.amazonaws.com/{object_name}",
-            "objectKey": object_name,
-            "ai_labels": [label.lower() for label in labels]
-        }
-        logger.info('Record to index: %s', record)
-        
-        
-        # index_to_opensearch(es_client, es_index, record)
-        
-        
-        logger.info('Record indexed to OpenSearch')
         
         response = insert_item(
             user_id=f"{user_id}",
+            s3_path = f"{bucket_name}/{object_name}",
             image_id=f"{image_id}",
             filename=f"{filename}",
             caption=""
         )
-        print("Insert Item Response:", response)
+        logger.info("Insert Item Response: %s", response)
         
         return {
             'statusCode': 200,
