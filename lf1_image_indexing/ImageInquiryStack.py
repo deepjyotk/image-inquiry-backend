@@ -57,6 +57,17 @@ class ImageInquiryStack(Stack):
                                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
                                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess")
                                ])
+        auth_role = iam.Role(self, "AuthRole",
+                     assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+                     managed_policies=[
+                         iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
+                         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonRekognitionFullAccess"),
+                         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonOpenSearchServiceFullAccess"),
+                         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
+                         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess"),
+                         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonCognitoPowerUser")  # Full access to Cognito
+                     ])
+
         
         
         search_handler_role = iam.Role(self, "LambdaExecutionRole2",
@@ -102,7 +113,7 @@ class ImageInquiryStack(Stack):
                                         runtime=lambda_.Runtime.PYTHON_3_12,
                                         handler="handler.lambda_handler",
                                         code=lambda_.Code.from_asset("./lambdas/imageinquiry-auth-handler"),
-                                        role=lambda_role1,
+                                        role=auth_role,
                                         # layers=[layer1],
                                         timeout=Duration.minutes(10),
                                         environment={
