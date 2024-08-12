@@ -28,6 +28,11 @@ def parse_multipart_data(content_type, body_data):
             header_area = header_area.decode('utf-8')
             name_part = header_area.split('name="')[1].split('"')[0]
             
+            # logger.info(f"header_area is: {header_area}")
+            # logger.info(f"_ is: {_}")
+            # logger.info(f"name_part: {name_part}")
+            # logger.info(f"content is: {header_area}")
+            
             if 'filename="' in header_area:
                 image_bytes = content.rstrip(b'\r\n')
             else:
@@ -71,10 +76,36 @@ def index_to_opensearch(es_client, index_name, record):
     except Exception as e:
         raise RuntimeError(f"Failed to index to OpenSearch: {str(e)}")
 
+
+
+def insert_item(user_id, image_id, filename, caption):
+    # Initialize a session using Amazon DynamoDB
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    
+    # Select your DynamoDB table
+    table = dynamodb.Table('imageinquiry-images')
+
+    # Insert item into the table with an empty tags list
+    response = table.put_item(
+        Item={
+            'user_id': user_id,
+            'image_id': image_id,
+            'filename': filename,
+            'caption': caption,
+            'tags': [],  # Initially empty,
+            'image_status':'AI_LABELS_GENERATED'
+        }
+    )
+    
+    return response
+
+
 def lambda_handler(event, context):
     logger.info('Event: %s', json.dumps(event))
     s3_client = boto3.client('s3')
     rkgn_client = boto3.client('rekognition')
+    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub',{})
+    logger.info(f"user_id is: {user_id}")
     
     try:
         content_type = event['headers']['Content-Type']
@@ -84,10 +115,12 @@ def lambda_handler(event, context):
         
         parsed_parts, image_bytes = parse_multipart_data(content_type, body_data)
         logger.info('Parsed parts: %s', parsed_parts)
+        filename = parsed_parts.get('filename')
+        logger.info(f"filename is: {filename}")
         
         bucket_name = 'imageinquiry-images'
         
-        user_id = "u123"  # Replace with the actual user ID from your context or event
+        # user_id = "u123"  # Replace with the actual user ID from your context or event
         image_id = str(uuid.uuid4())
         object_name = f"{user_id}/{image_id}"
         logger.info('Object name: %s', object_name)
@@ -128,12 +161,23 @@ def lambda_handler(event, context):
         }
         logger.info('Record to index: %s', record)
         
-        index_to_opensearch(es_client, es_index, record)
+        
+        # index_to_opensearch(es_client, es_index, record)
+        
+        
         logger.info('Record indexed to OpenSearch')
+        
+        response = insert_item(
+            user_id=f"{user_id}",
+            image_id=f"{image_id}",
+            filename=f"{filename}",
+            caption=""
+        )
+        print("Insert Item Response:", response)
         
         return {
             'statusCode': 200,
-            'body': json.dumps({'labels': labels})
+            'body': json.dumps({'labels': labels, 'image_id': image_id})
         }
 
     except KeyError as e:

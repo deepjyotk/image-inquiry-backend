@@ -2,9 +2,9 @@ import json
 import logging
 import datetime
 import boto3
-from elasticsearch import Elasticsearch, RequestsHttpConnection
+from elasticsearch import Elasticsearch
 from boto3.dynamodb.conditions import Key
-
+from opensearchpy import RequestsHttpConnection
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)

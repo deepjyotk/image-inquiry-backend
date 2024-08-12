@@ -74,6 +74,23 @@ def update_document(user_id, object_key, final_labels):
     else:
         logger.error("Document not found")
         return {"error": "Document not found"}
+        
+def fetch_item_from_dynamoDB(user_id, image_id):
+    # Initialize a session using Amazon DynamoDB
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    
+    # Select your DynamoDB table
+    table = dynamodb.Table('imageinquiry-images')
+
+    # Query the table using both user_id and image_id
+    response = table.get_item(
+        Key={
+            'user_id': user_id,
+            'image_id': image_id
+        }
+    )
+
+    return response.get('Item')
 
 def lambda_handler(event, context):
     if isinstance(event, str):
@@ -85,6 +102,8 @@ def lambda_handler(event, context):
     try:
         user_sub = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub',{})
         logger.info(f"User sub is: {user_sub}")
+        
+        fetch_item_from_dynamoDB(image_id, user_id)
         
         # Handling multipart/form-data
         content_type = event['headers'].get('Content-Type', '')
