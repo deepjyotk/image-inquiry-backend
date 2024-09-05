@@ -58,6 +58,6 @@ command.
 
 ## Architecture
 
-<img width="1002" alt="image" src="https://github.com/deepjyotk/lf1-image-indexing/assets/45242325/622d598e-0ac1-4718-b5db-14ec6e8c0271">
+<img width="892" alt="image" src="https://github.com/user-attachments/assets/d97971ca-de77-4983-b4c3-f7f80c7e5d25">
 
 
