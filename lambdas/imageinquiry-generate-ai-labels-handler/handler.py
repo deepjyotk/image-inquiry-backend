@@ -102,6 +102,7 @@ def insert_item(user_id, s3_path, image_id, filename, caption):
 
 
 def lambda_handler(event, context):
+    logger.info("Lambda Triggered")
     logger.info('Event: %s', json.dumps(event))
     s3_client = boto3.client('s3')
     rkgn_client = boto3.client('rekognition')
