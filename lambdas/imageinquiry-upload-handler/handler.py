@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 def insert_document(user_id, s3_path, final_labels):
     logger.info("Starting the document insertion process.")
     
-    es_label = f"photo-label-{user_id}"
+    es_label = f"photo-label"
     logger.info(f"ES label: {es_label}")
     
     # Define the index endpoint

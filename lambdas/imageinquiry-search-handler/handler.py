@@ -193,7 +193,7 @@ def get_photo_path(query_string, user_sub):
         logger.info(f"Connected to OpenSearch at {host}")
         query = construct_query(query_string)
 
-        INDEX_NAME = f"photo-label-{user_sub}"
+        INDEX_NAME = f"photo-label"
 
         # Perform the search
         response = es.search(index=INDEX_NAME, body=query)
